@@ -1,0 +1,27 @@
+# This is the REUSABLE WORKFLOW (Day 4's first concept).
+# Note it triggers on `workflow_call`, not push/pull_request — it's never run directly,
+# only invoked by another workflow via `uses:`.
+name: Reusable Build & Test
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.12"
+        required: false
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # This step calls the COMPOSITE ACTION from .github/actions/ — one step,
+      # even though it wraps two steps internally. Composite action, used INSIDE
+      # a job that belongs to a reusable workflow — both Day 4 concepts, together.
+      - name: Set up Python and install deps
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Run tests
+        run: pytest -v

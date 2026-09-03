@@ -1,0 +1,52 @@
+# This is the CALLER workflow — triggered normally by push/PR.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # This "job" IS a call to the reusable workflow above. It cannot have its own
+  # `steps:` — uses: and steps: are mutually exclusive on a job. Note the path
+  # starts with "./" because it's a reusable workflow in the SAME repo.
+  build:
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      python-version: "3.12"
+
+  # This job runs in PARALLEL with `build` (no `needs:` between them) — proves
+  # the "reusable workflow call is just a job like any other" point.
+  lint-placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "pretend a linter ran here — this job has nothing to do with `build`, so it doesn't wait for it."
+
+  # This job DOES wait — it has `needs: build`, so it only starts once every job
+  # inside the reusable workflow has finished successfully.
+  notify:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "build finished — this only prints after the reusable workflow completes."
+
+  # --- OIDC hands-on: see a REAL OIDC token's claims, no cloud account needed ---
+  # This requires `permissions: id-token: write` at the job level. It fetches the
+  # same OIDC token GitHub would present to AWS/Azure, and decodes the JWT payload
+  # so you can see the actual claims (repository, ref, workflow, sub) an IAM trust
+  # policy would check. This is the exact mechanism from Day 4 — you're seeing it
+  # for real instead of reading about it.
+  inspect-oidc-token:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Request and decode OIDC token
+        run: |
+          TOKEN=$(curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "----- Decoded OIDC token claims -----"
+          echo "$TOKEN" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq .
